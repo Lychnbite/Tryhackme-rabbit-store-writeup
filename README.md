@@ -1,199 +1,179 @@
 # Tryhackme-rabbit-store-writeup
 Red Team penetration testing report demonstrating a full kill chain from web access to root compromise on the TryHackMe Rabbit Store machine.
 
-🐇 Rabbit Store Web Application
-Penetration Testing Report & Kill Chain Walkthrough
-1. Introduction & Scope
-1.1 Purpose of the Report
+# Rabbit Store Web Application
 
-This report documents the results of a penetration test conducted against the Rabbit Store web application.
-The primary objective of this assessment was to proactively evaluate the security posture of the application, identify exploitable vulnerabilities, and demonstrate their real-world impact by chaining them together into a full system compromise.
+## Penetration Testing Report (Red Team Case Study)
 
-The test was performed from an attacker’s perspective and focused on simulating realistic attack scenarios rather than isolated vulnerability checks.
+## Executive Summary
 
-The main goals of this report are:
+This report presents the results of a penetration test conducted against the **Rabbit Store web application**, hosted within a TryHackMe laboratory environment.
+The assessment demonstrates how multiple security weaknesses across the **web application, internal services, and message queue infrastructure** can be chained together to achieve **full system compromise (root access)**.
 
-To clearly define the scope of the Rabbit Store application.
+The engagement followed a **kill chain–driven methodology**, simulating realistic attacker behavior from initial reconnaissance through privilege escalation.
 
-To document the methodology and tools used during testing.
+> **Impact:**
+> An unauthenticated remote attacker can fully compromise the underlying system, gaining root-level access.
 
-To provide step-by-step exploitation details so that learners can reproduce the attack.
+---
 
-To chronologically document the kill chain, from initial reconnaissance to full root compromise.
+## Scope & Objectives
 
-2. Methodology & Tools
-2.1 Testing Methodology
+### Scope
 
-A structured external-to-internal kill chain methodology was used.
-Each phase built upon the information gathered in the previous stage, allowing vulnerabilities to be exploited in context rather than isolation.
+* Rabbit Store Web Application
+* Associated internal services
+* RabbitMQ & Erlang-based infrastructure
 
-Testing Phases:
+### Objectives
 
-Reconnaissance – Identifying exposed services, ports, and subdomains.
+* Identify exploitable vulnerabilities
+* Demonstrate real-world attack paths
+* Document a complete attack chain
+* Provide reproducible, educational findings
 
-Initial Access – Abusing a web logic flaw to gain privileged application access.
+---
 
-Enumeration – Discovering internal services and undocumented API endpoints.
+## Methodology
 
-Exploitation – Achieving remote command execution via SSTI.
+The test followed a structured **external-to-internal penetration testing methodology**, where each phase informed the next.
 
-Privilege Escalation – Pivoting through RabbitMQ and misconfigurations to obtain root access.
+**Assessment Phases:**
 
-2.2 Tools Used
-Tool	Purpose
-Nmap	Port scanning and service identification (SSH, HTTP, Erlang, RabbitMQ)
-FFuf	Subdomain and API endpoint enumeration
-Burp Suite	Intercepting and manipulating HTTP requests (JWT abuse)
-pspy	Monitoring background processes for privilege escalation
-Custom Python Scripts	SSRF enumeration and Erlang exploitation
-revshells.com	Generating reverse shell payloads
-rabbitmqctl / rabbitmqadmin	RabbitMQ user management and configuration export
-3. Findings & Exploitation Chain
+1. Reconnaissance
+2. Initial Access
+3. Internal Enumeration
+4. Exploitation
+5. Lateral Movement
+6. Privilege Escalation
 
-This section explains how individual vulnerabilities were chained together to achieve full system compromise.
+This approach ensured vulnerabilities were evaluated **in context**, rather than isolation.
 
-3.1 Phase 1 – Reconnaissance & Enumeration
+---
 
-Nmap scanning revealed the following open ports:
+## Tools Used
 
-22   SSH
-80   HTTP
-4369 Erlang Port Mapper (epmd)
-25672 RabbitMQ
+| Tool                        | Purpose                                     |
+| --------------------------- | ------------------------------------------- |
+| Nmap                        | Network scanning and service discovery      |
+| FFuf                        | Subdomain and endpoint enumeration          |
+| Burp Suite                  | HTTP interception and request manipulation  |
+| pspy                        | Process monitoring for privilege escalation |
+| Custom Python Scripts       | SSRF enumeration & Erlang exploitation      |
+| revshells.com               | Reverse shell payload generation            |
+| rabbitmqctl / rabbitmqadmin | RabbitMQ administration & data export       |
 
+---
 
-FFuf subdomain enumeration identified:
+## Attack Chain Overview
 
-storage.cloudsite.thm
+### Phase 1 – Reconnaissance
 
+* Identified exposed services: SSH, HTTP, Erlang Port Mapper, RabbitMQ
+* Discovered `storage.cloudsite.thm` subdomain hosting the application
 
-The storage subdomain hosted a functional web application with authentication features, significantly expanding the attack surface.
+---
 
-3.2 Phase 2 – Privileged Web Access (JWT Logic Flaw)
+### Phase 2 – Application Logic Flaw (JWT Manipulation)
 
-A user registration request was intercepted using Burp Suite.
+* User registration requests were intercepted
+* Adding an unvalidated JSON parameter:
 
-The request body was a JSON object containing email and password.
+  ```json
+  "subscription": "active"
+  ```
 
-By manually adding the parameter:
+  resulted in issuance of a **privileged JWT**
+* Administrative approval was bypassed
 
-"subscription": "active"
+**Impact:** Unauthorized access to restricted application features
 
+---
 
-the server issued a privileged JWT without validation.
+### Phase 3 – Internal Network Access (SSRF)
 
-Impact:
+* “Upload from URL” feature enabled server-side HTTP requests
+* SSRF was exploited to access:
 
-Administrative approval was bypassed.
+  ```
+  http://127.0.0.1:3000
+  ```
+* Internal API documentation was exposed via `/api/docs`
 
-Restricted application features (file upload, internal fetch functionality) became accessible.
+---
 
-3.3 Phase 3 – Internal Network Discovery (SSRF)
+### Phase 4 – Remote Code Execution (SSTI)
 
-The “Upload from URL” feature caused the server to fetch user-supplied URLs.
+* The internal API reflected user-controlled input
+* A **Server-Side Template Injection (SSTI)** vulnerability was confirmed
+* Arbitrary command execution was achieved on the server
 
-This behavior enabled Server-Side Request Forgery (SSRF).
+---
 
-Requests to:
+### Phase 5 – Initial Foothold
 
-http://127.0.0.1:<port>
+* SSTI was leveraged to execute a reverse shell
+* Interactive shell access obtained as user **azrael**
 
+---
 
-were successfully processed.
+### Phase 6 – Lateral Movement (RabbitMQ)
 
-Using a custom Python script, an internal service was discovered on:
+* `pspy` revealed RabbitMQ-related background processes
+* `.erlang.cookie` was recovered from `/var/lib/rabbitmq/`
+* Erlang Distribution Protocol was abused
+* Shell access obtained as **rabbitmq** user
 
-Port 3000
+---
 
+### Phase 7 – Privilege Escalation (Root)
 
-Accessing:
+* RabbitMQ database files revealed a critical configuration flaw
+* The system root password matched the RabbitMQ root SHA-256 hash
+* RabbitMQ definitions were exported
+* The base64-encoded hash was decoded
+* The raw SHA-256 hash was accepted as the root password
 
-http://127.0.0.1:3000/api/docs
+**Result:** Full root access obtained
 
+---
 
-exposed undocumented API endpoints.
+## Impact Assessment
 
-3.4 Phase 4 – Remote Code Execution (SSTI)
+* Complete system compromise
+* Full administrative control
+* Potential for data exfiltration
+* Infrastructure pivoting risk
+* Service disruption capability
 
-The endpoint:
+---
 
-/api/fetch_messages_from_chatbot
+## Key Takeaways
 
+* Internal services must never be implicitly trusted
+* Message queue systems represent high-value attack surfaces
+* Logic flaws can act as critical entry points
+* Chained vulnerabilities significantly amplify risk
+* Credential handling failures directly lead to full compromise
 
-reflected user-controlled input in the response.
+---
 
-Injecting Jinja2 payloads confirmed a Server-Side Template Injection (SSTI) vulnerability.
+## Conclusion
 
-The payload successfully executed system commands, proving Remote Code Execution (RCE).
+The Rabbit Store application contains multiple critical security weaknesses across both application and infrastructure layers.
+When combined, these weaknesses enable an attacker to progress from unauthenticated access to full root compromise.
 
-3.5 Phase 5 – Foothold (azrael User)
+This assessment highlights the importance of **defense-in-depth**, strict validation of trust boundaries, and secure credential management.
 
-A base64-encoded reverse shell payload was generated.
+---
 
-The payload was executed via SSTI.
+## Disclaimer
 
-An interactive shell was obtained as the azrael user.
-
-3.6 Phase 6 – Lateral Movement (rabbitmq User)
-
-pspy revealed frequent RabbitMQ-related background processes.
-
-Investigation of /var/lib/rabbitmq/ exposed the .erlang.cookie file.
-
-Using this cookie, a custom Erlang exploit (shell-erldp2.py) was executed.
-
-A second shell was obtained as the rabbitmq user.
-
-3.7 Phase 7 – Final Privilege Escalation (root)
-
-A critical clue was found inside RabbitMQ database files:
-
-rabbit_user.DCD
-
-
-indicating that the system root password matched the RabbitMQ root SHA-256 hash.
-
-Steps performed:
-
-Created a new RabbitMQ administrator user (0xb0b).
-
-Exported RabbitMQ definitions:
-
-rabbit.definitions.json
-
-
-Extracted the base64-encoded root password hash.
-
-Decoded the hash to obtain the raw SHA-256 value.
-
-Used the hash itself as the root password:
-
-su root
-
-
-Root access was successfully obtained.
-
-4. Conclusion
-
-This assessment demonstrates that the Rabbit Store web application suffers from multiple critical security weaknesses across both application and infrastructure layers.
-
-A seemingly minor JWT logic flaw acted as the initial entry point, ultimately enabling:
-
-Internal network access via SSRF
-
-Remote code execution via SSTI
-
-Lateral movement through RabbitMQ
-
-Full root compromise due to unsafe credential handling
-
-The findings highlight how chained vulnerabilities, even if individually moderate, can result in complete system takeover when combined.
-
-⚠️ Disclaimer
-
-This report was created solely for educational purposes within a controlled TryHackMe environment.
+This report was created strictly for **educational purposes** within a controlled TryHackMe environment.
 No real-world systems were targeted.
 
-🔗 Tags
+---
 
-#TryHackMe #PenetrationTesting #RedTeam #KillChain #SSRF #SSTI #RabbitMQ #Erlang #PrivilegeEscalation
+## Tags
+
+`#RedTeam` `#PenetrationTesting` `#KillChain` `#TryHackMe` `#RabbitMQ` `#Erlang` `#SSRF` `#SSTI` `#PrivilegeEscalation`
