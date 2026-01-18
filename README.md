@@ -1,14 +1,23 @@
-# Tryhackme-rabbit-store-writeup
+<p align="center">
+  <img src="https://img.shields.io/badge/Red%20Team-Penetration%20Testing-critical" />
+  <img src="https://img.shields.io/badge/Attack%20Chain-Full%20Kill%20Chain-orange" />
+  <img src="https://img.shields.io/badge/Environment-TryHackMe-blue" />
+</p>
+
+<h1 align="center">TryHackMe – Rabbit Store</h1>
+
+<p align="center">
+  Red Team penetration testing report demonstrating a full kill chain from web access to root compromise.
+</p>
+
 Red Team penetration testing report demonstrating a full kill chain from web access to root compromise on the TryHackMe Rabbit Store machine.
 
 # Rabbit Store Web Application
 
 ## Penetration Testing Report (Red Team Case Study)
 
-## Executive Summary
-
-This report presents the results of a penetration test conducted against the **Rabbit Store web application**, hosted within a TryHackMe laboratory environment.
-The assessment demonstrates how multiple security weaknesses across the **web application, internal services, and message queue infrastructure** can be chained together to achieve **full system compromise (root access)**.
+> 🔴 **Impact**  
+> An unauthenticated remote attacker can fully compromise the underlying system, gaining **root-level access**.
 
 The engagement followed a **kill chain–driven methodology**, simulating realistic attacker behavior from initial reconnaissance through privilege escalation.
 
@@ -65,7 +74,16 @@ This approach ensured vulnerabilities were evaluated **in context**, rather than
 
 ---
 
-## Attack Chain Overview
+## 🔗 Attack Chain Overview
+
+- 🛰️ Reconnaissance (Nmap, FFuf)
+- 🔓 JWT Logic Flaw
+- 🌐 Server-Side Request Forgery (SSRF)
+- 💥 Server-Side Template Injection (SSTI)
+- 🐚 Initial Foothold (azrael)
+- 🔄 Lateral Movement (rabbitmq)
+- 👑 Root Privilege Escalation
+
 
 ### Phase 1 – Reconnaissance
 
